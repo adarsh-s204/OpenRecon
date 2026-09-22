@@ -1,0 +1,334 @@
+:root {
+  --bg: #071018;
+  --panel: #0d1b26;
+  --panel-2: #102433;
+  --line: rgba(102, 226, 255, 0.18);
+  --text: #d8f6ff;
+  --muted: #88a7b5;
+  --cyan: #37dfff;
+  --blue: #2878ff;
+  --green: #40e6a3;
+  --yellow: #ffd166;
+  --red: #ff6b6b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at 20% 0%, rgba(40, 120, 255, 0.22), transparent 32%), var(--bg);
+  color: var(--text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  padding: 24px;
+  background: rgba(6, 17, 26, 0.92);
+  border-right: 1px solid var(--line);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--cyan);
+  background: rgba(55, 223, 255, 0.08);
+  color: var(--cyan);
+  font-weight: 800;
+}
+
+.brand small,
+.summary-card small,
+.topbar p,
+.ethics-note,
+.progress-text,
+#graphHint,
+#reportSummary {
+  color: var(--muted);
+}
+
+.sidebar .nav-link {
+  color: var(--muted);
+  border-left: 2px solid transparent;
+  padding: 12px 14px;
+}
+
+.sidebar .nav-link.active,
+.sidebar .nav-link:hover {
+  color: var(--cyan);
+  background: rgba(55, 223, 255, 0.08);
+  border-left-color: var(--cyan);
+}
+
+.ethics-note {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 24px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: rgba(16, 36, 51, 0.7);
+  font-size: 0.86rem;
+}
+
+.content {
+  padding: 30px;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 4.4rem);
+  font-weight: 800;
+}
+
+.status-pill {
+  border: 1px solid var(--line);
+  color: var(--cyan);
+  padding: 8px 12px;
+  background: rgba(55, 223, 255, 0.08);
+  white-space: nowrap;
+}
+
+.recon-panel,
+.panel,
+.summary-card {
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(16, 36, 51, 0.9), rgba(8, 22, 33, 0.9));
+}
+
+.recon-panel {
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.form-label {
+  color: var(--muted);
+}
+
+.form-control,
+.form-select {
+  color: var(--text);
+  background-color: #071824;
+  border: 1px solid rgba(136, 167, 181, 0.28);
+  border-radius: 4px;
+}
+
+.form-control:focus,
+.form-select:focus {
+  color: var(--text);
+  background-color: #071824;
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 0.2rem rgba(55, 223, 255, 0.14);
+}
+
+.btn-cyber {
+  color: #001018;
+  background: linear-gradient(90deg, var(--cyan), var(--blue));
+  border: 0;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.btn-outline-info {
+  border-radius: 4px;
+}
+
+.recon-progress {
+  height: 8px;
+  margin-top: 18px;
+  background: rgba(136, 167, 181, 0.18);
+  border-radius: 0;
+}
+
+.progress-bar {
+  background: linear-gradient(90deg, var(--blue), var(--cyan), var(--green));
+}
+
+.progress-text {
+  margin-top: 10px;
+  font-size: 0.92rem;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.summary-card {
+  padding: 18px;
+  min-height: 132px;
+}
+
+.summary-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.summary-card strong {
+  display: block;
+  margin: 10px 0 4px;
+  font-size: 2.1rem;
+  color: var(--cyan);
+}
+
+.visual-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.panel {
+  padding: 18px;
+  margin-bottom: 20px;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.panel h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+canvas {
+  width: 100%;
+  max-height: 260px;
+}
+
+#networkGraph {
+  width: 100%;
+  height: 360px;
+  background: rgba(7, 16, 24, 0.74);
+  border: 1px solid rgba(136, 167, 181, 0.16);
+}
+
+.table {
+  --bs-table-bg: transparent;
+  --bs-table-border-color: rgba(136, 167, 181, 0.16);
+}
+
+.table-filter {
+  max-width: 280px;
+}
+
+.badge-severity {
+  border-radius: 3px;
+  padding: 6px 8px;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+
+.severity-info {
+  background: rgba(136, 167, 181, 0.18);
+  color: var(--muted);
+}
+
+.severity-low {
+  background: rgba(64, 230, 163, 0.14);
+  color: var(--green);
+}
+
+.severity-medium {
+  background: rgba(255, 209, 102, 0.14);
+  color: var(--yellow);
+}
+
+.severity-high {
+  background: rgba(255, 107, 107, 0.14);
+  color: var(--red);
+}
+
+.empty-state {
+  color: var(--muted) !important;
+  text-align: center;
+  padding: 24px !important;
+}
+
+.report-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+a {
+  color: var(--cyan);
+}
+
+@media (max-width: 1100px) {
+  .summary-grid,
+  .visual-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+    height: auto;
+  }
+
+  .ethics-note {
+    position: static;
+    margin-top: 22px;
+  }
+
+  .content {
+    padding: 18px;
+  }
+
+  .topbar,
+  .report-panel,
+  .panel-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .summary-grid,
+  .visual-grid {
+    grid-template-columns: 1fr;
+  }
+}

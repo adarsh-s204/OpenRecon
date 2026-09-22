@@ -1,0 +1,16 @@
+{
+  "name": "openrecon",
+  "version": "1.0.0",
+  "description": "Lawful OSINT exposure dashboard for public digital footprint analysis.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "osint",
+    "recon",
+    "digital-footprint"
+  ],
+  "author": "",
+  "license": "MIT"
+}
