@@ -1,9 +1,12 @@
 const http = require("http");
-const https = require("https");
 const fs = require("fs");
 const path = require("path");
-const dns = require("dns").promises;
 const crypto = require("crypto");
+const { buildCorrelationGraph } = require("./analysis/correlation");
+const { calculateExposureScore } = require("./analysis/exposureScore");
+const { collectDomain } = require("./collectors/domainCollector");
+const { collectEmail } = require("./collectors/emailCollector");
+const { collectUsername } = require("./collectors/usernameCollector");
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -41,54 +44,6 @@ function readBody(req) {
   });
 }
 
-function requestJson(url, options = {}) {
-  return new Promise(resolve => {
-    const request = https.request(url, {
-      method: "GET",
-      headers: {
-        "Accept": "application/vnd.github+json, application/json",
-        "User-Agent": "OpenRecon-Lawful-OSINT-Prototype",
-        ...options.headers
-      },
-      timeout: 8000
-    }, response => {
-      let body = "";
-      response.on("data", chunk => body += chunk);
-      response.on("end", () => {
-        try {
-          resolve({ ok: response.statusCode >= 200 && response.statusCode < 300, status: response.statusCode, data: JSON.parse(body) });
-        } catch {
-          resolve({ ok: false, status: response.statusCode, data: null });
-        }
-      });
-    });
-    request.on("timeout", () => {
-      request.destroy();
-      resolve({ ok: false, status: 408, data: null });
-    });
-    request.on("error", () => resolve({ ok: false, status: 0, data: null }));
-    request.end();
-  });
-}
-
-function requestHead(url) {
-  return new Promise(resolve => {
-    const request = https.request(url, {
-      method: "HEAD",
-      headers: { "User-Agent": "OpenRecon-Lawful-OSINT-Prototype" },
-      timeout: 6000
-    }, response => {
-      resolve({ ok: response.statusCode >= 200 && response.statusCode < 400, status: response.statusCode });
-    });
-    request.on("timeout", () => {
-      request.destroy();
-      resolve({ ok: false, status: 408 });
-    });
-    request.on("error", () => resolve({ ok: false, status: 0 }));
-    request.end();
-  });
-}
-
 function normalizeInput(type, value) {
   const trimmed = String(value || "").trim();
   if (type === "email") return trimmed.toLowerCase();
@@ -105,185 +60,11 @@ function validateTarget(type, value) {
   return null;
 }
 
-function makeFinding({ title, category, severity = "info", source, confidence = "medium", evidenceUrl, detail, entity }) {
-  return {
-    id: crypto.randomUUID(),
-    title,
-    category,
-    severity,
-    source,
-    confidence,
-    evidenceUrl,
-    detail,
-    entity,
-    observedAt: new Date().toISOString()
-  };
-}
-
-async function collectDns(domain) {
-  const findings = [];
-  const recordTypes = ["A", "AAAA", "MX", "NS", "TXT", "CAA"];
-  await Promise.all(recordTypes.map(async recordType => {
-    try {
-      const records = await dns.resolve(domain, recordType);
-      if (!records || !records.length) return;
-      findings.push(makeDnsFinding(domain, recordType, records, "system resolver"));
-    } catch {
-      const fallback = await collectDnsOverHttps(domain, recordType);
-      if (fallback) findings.push(fallback);
-    }
-  }));
-  return findings;
-}
-
-async function collectDnsOverHttps(domain, recordType) {
-  const response = await requestJson(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=${recordType}`, {
-    headers: { "Accept": "application/dns-json" }
-  });
-  if (!response.ok || !response.data || !Array.isArray(response.data.Answer) || !response.data.Answer.length) return null;
-  const records = response.data.Answer.map(answer => answer.data);
-  return makeDnsFinding(domain, recordType, records, "DNS-over-HTTPS");
-}
-
-function makeDnsFinding(domain, recordType, records, resolver) {
-  const value = JSON.stringify(records).slice(0, 500);
-  return makeFinding({
-    title: `${recordType} records found`,
-    category: "DNS",
-    severity: recordType === "TXT" ? "medium" : "low",
-    source: "Public DNS",
-    confidence: "high",
-    evidenceUrl: `https://dns.google/query?name=${encodeURIComponent(domain)}&type=${recordType}`,
-    detail: `${resolver}: ${value}`,
-    entity: domain
-  });
-}
-
-async function collectGithubUsername(username) {
-  const findings = [];
-  const user = await requestJson(`https://api.github.com/users/${encodeURIComponent(username)}`);
-  if (!user.ok || !user.data) {
-    findings.push(makeFinding({
-      title: "GitHub profile not confirmed",
-      category: "GitHub",
-      severity: "info",
-      source: "GitHub",
-      confidence: "low",
-      evidenceUrl: `https://github.com/${encodeURIComponent(username)}`,
-      detail: "No public GitHub profile was confirmed by the API during this scan.",
-      entity: username
-    }));
-    return findings;
-  }
-
-  const profile = user.data;
-  findings.push(makeFinding({
-    title: "Public GitHub profile found",
-    category: "GitHub",
-    severity: profile.email || profile.blog || profile.company || profile.location ? "medium" : "low",
-    source: "GitHub API",
-    confidence: "high",
-    evidenceUrl: profile.html_url,
-    detail: [
-      profile.name ? `Name: ${profile.name}` : null,
-      profile.company ? `Company: ${profile.company}` : null,
-      profile.location ? `Location: ${profile.location}` : null,
-      profile.blog ? `Website: ${profile.blog}` : null,
-      profile.public_repos !== undefined ? `Public repositories: ${profile.public_repos}` : null,
-      profile.followers !== undefined ? `Followers: ${profile.followers}` : null
-    ].filter(Boolean).join(" | ") || "Profile exists with limited public metadata.",
-    entity: username
-  }));
-
-  const repos = await requestJson(`https://api.github.com/users/${encodeURIComponent(username)}/repos?per_page=5&sort=updated`);
-  if (repos.ok && Array.isArray(repos.data) && repos.data.length) {
-    repos.data.forEach(repo => {
-      findings.push(makeFinding({
-        title: `Public repository: ${repo.name}`,
-        category: "GitHub",
-        severity: repo.fork ? "low" : "medium",
-        source: "GitHub API",
-        confidence: "high",
-        evidenceUrl: repo.html_url,
-        detail: `${repo.description || "No description."} Stars: ${repo.stargazers_count}. Updated: ${repo.updated_at}.`,
-        entity: repo.full_name
-      }));
-    });
-  }
-  return findings;
-}
-
-async function collectSocialCandidates(username) {
-  const platforms = [
-    { source: "Instagram", url: `https://www.instagram.com/${encodeURIComponent(username)}/` },
-    { source: "Facebook", url: `https://www.facebook.com/${encodeURIComponent(username)}` },
-    { source: "LinkedIn", url: `https://www.linkedin.com/in/${encodeURIComponent(username)}` }
-  ];
-
-  const results = await Promise.all(platforms.map(async platform => {
-    const status = await requestHead(platform.url);
-    return makeFinding({
-      title: status.ok ? `${platform.source} public profile candidate responded` : `${platform.source} profile candidate`,
-      category: "Social",
-      severity: status.ok ? "medium" : "info",
-      source: platform.source,
-      confidence: status.ok ? "medium" : "low",
-      evidenceUrl: platform.url,
-      detail: status.ok
-        ? `The public URL responded with HTTP ${status.status}. Review manually because platforms can rate-limit, redirect, or require consent screens.`
-        : `Candidate public profile URL. It was not confirmed automatically and may require manual review of publicly visible content only.`,
-      entity: username
-    });
-  }));
-
-  return results;
-}
-
-async function collectEmail(email) {
-  const [localPart, domain] = email.split("@");
-  const hash = crypto.createHash("md5").update(email.trim().toLowerCase()).digest("hex");
-  return [
-    makeFinding({
-      title: "Email domain identified",
-      category: "Email",
-      severity: "low",
-      source: "Input normalization",
-      confidence: "high",
-      evidenceUrl: `https://${domain}`,
-      detail: `Mailbox pattern exposes username fragment "${localPart}" and domain "${domain}".`,
-      entity: email
-    }),
-    makeFinding({
-      title: "Public avatar profile candidate",
-      category: "Email",
-      severity: "info",
-      source: "Gravatar",
-      confidence: "low",
-      evidenceUrl: `https://www.gravatar.com/${hash}`,
-      detail: "A deterministic public avatar URL was generated for manual public review. No private data was accessed.",
-      entity: email
-    }),
-    makeFinding({
-      title: "Public search reference link",
-      category: "Email",
-      severity: "info",
-      source: "Permitted public web source",
-      confidence: "low",
-      evidenceUrl: `https://www.google.com/search?q=${encodeURIComponent(`"${email}"`)}`,
-      detail: "Evidence link for manual review of lawful public web references. OpenRecon does not bypass search-provider controls.",
-      entity: email
-    })
-  ];
-}
-
 async function runCollectors(type, target) {
-  if (type === "domain") return collectDns(target);
-  if (type === "username") {
-    const [github, social] = await Promise.all([collectGithubUsername(target), collectSocialCandidates(target)]);
-    return [...github, ...social];
-  }
+  if (type === "domain") return collectDomain(target);
+  if (type === "username") return collectUsername(target);
   const domain = target.split("@")[1];
-  const [emailFindings, dnsFindings] = await Promise.all([collectEmail(target), collectDns(domain)]);
+  const [emailFindings, dnsFindings] = await Promise.all([collectEmail(target), collectDomain(domain)]);
   return [...emailFindings, ...dnsFindings];
 }
 
@@ -298,39 +79,18 @@ function analyzeFindings(type, target, findings) {
     return acc;
   }, {});
 
-  const severityWeights = { info: 2, low: 8, medium: 16, high: 28 };
-  const rawScore = findings.reduce((sum, finding) => sum + (severityWeights[finding.severity] || 4), 0);
-  const confidenceBonus = findings.filter(finding => finding.confidence === "high").length * 2;
-  const exposureScore = Math.min(100, Math.round(rawScore + confidenceBonus));
-
-  const correlations = [];
-  const targetNode = `target:${target}`;
-  findings.forEach(finding => {
-    correlations.push({ from: targetNode, to: `finding:${finding.id}`, label: finding.category });
-    correlations.push({ from: `finding:${finding.id}`, to: `source:${finding.source}`, label: finding.confidence });
-  });
-
-  if (type === "email") {
-    correlations.push({ from: targetNode, to: `domain:${target.split("@")[1]}`, label: "uses domain" });
-  }
-
-  const nodes = [
-    { id: targetNode, label: target, type: "target" },
-    ...Array.from(new Set(findings.map(finding => `source:${finding.source}`))).map(id => ({ id, label: id.replace("source:", ""), type: "source" })),
-    ...findings.map(finding => ({ id: `finding:${finding.id}`, label: finding.title, type: "finding", severity: finding.severity }))
-  ];
-
-  if (type === "email") {
-    nodes.push({ id: `domain:${target.split("@")[1]}`, label: target.split("@")[1], type: "domain" });
-  }
+  const scoring = calculateExposureScore(findings);
+  const exposureScore = scoring.exposureScore;
+  const graph = buildCorrelationGraph(type, target, findings);
 
   const summary = {
     exposureScore,
     findingCount: findings.length,
     sourceCount: Object.keys(sourceCounts).length,
-    correlationCount: correlations.length,
+    correlationCount: graph.links.length,
     sourceCounts,
     categoryCounts,
+    scoreBreakdown: scoring,
     riskLevel: exposureScore >= 70 ? "High" : exposureScore >= 35 ? "Moderate" : "Low",
     guidance: [
       "Review each evidence link manually and keep only lawful, public-source records.",
@@ -340,7 +100,7 @@ function analyzeFindings(type, target, findings) {
     ]
   };
 
-  return { summary, graph: { nodes, links: correlations } };
+  return { summary, graph };
 }
 
 function buildPdfBuffer(result) {
@@ -350,6 +110,7 @@ function buildPdfBuffer(result) {
     `Type: ${result.type}`,
     `Generated: ${new Date(result.generatedAt).toLocaleString()}`,
     `Exposure Score: ${result.summary.exposureScore}/100 (${result.summary.riskLevel})`,
+    `Score Formula: Critical +25, High +18, Medium +10, Low +5, Info +0`,
     `Findings: ${result.summary.findingCount}`,
     `Sources: ${result.summary.sourceCount}`,
     "",

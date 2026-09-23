@@ -277,6 +277,11 @@ canvas {
   color: var(--red);
 }
 
+.severity-critical {
+  background: rgba(255, 49, 49, 0.2);
+  color: #ff9b9b;
+}
+
 .empty-state {
   color: var(--muted) !important;
   text-align: center;
