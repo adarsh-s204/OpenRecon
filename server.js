@@ -46,17 +46,30 @@ function readBody(req) {
 
 function normalizeInput(type, value) {
   const trimmed = String(value || "").trim();
-  if (type === "email") return trimmed.toLowerCase();
-  if (type === "domain") return trimmed.replace(/^https?:\/\//i, "").split("/")[0].toLowerCase();
+  const resolvedType = type === "auto" ? detectTargetType(trimmed) : type;
+  if (resolvedType === "email") return trimmed.toLowerCase();
+  if (resolvedType === "domain") return trimmed.replace(/^https?:\/\//i, "").split("/")[0].toLowerCase();
   return trimmed.replace(/^@/, "");
 }
 
 function validateTarget(type, value) {
-  if (!["email", "username", "domain"].includes(type)) return "Choose a valid target type.";
+  if (!["auto", "email", "username", "domain"].includes(type)) return "Choose a valid target type.";
   if (!value) return "Enter a target value.";
-  if (type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Enter a valid email address.";
-  if (type === "domain" && !/^(?!-)[a-z0-9.-]+\.[a-z]{2,}$/i.test(value)) return "Enter a valid domain name.";
-  if (type === "username" && !/^[a-zA-Z0-9._-]{2,40}$/.test(value)) return "Enter a public username using letters, numbers, dots, underscores, or hyphens.";
+  const resolvedType = type === "auto" ? detectTargetType(value) : type;
+  if (!resolvedType) return "Could not auto-detect the target. Enter an email, domain, or public username.";
+  if (resolvedType === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Enter a valid email address.";
+  if (resolvedType === "domain" && !/^(?!-)[a-z0-9.-]+\.[a-z]{2,}$/i.test(value)) return "Enter a valid domain name.";
+  if (resolvedType === "username" && !/^[a-zA-Z0-9._-]{2,40}$/.test(value)) return "Enter a public username using letters, numbers, dots, underscores, or hyphens.";
+  return null;
+}
+
+function detectTargetType(value) {
+  const trimmed = String(value || "").trim();
+  const domainCandidate = trimmed.replace(/^https?:\/\//i, "").split("/")[0].toLowerCase();
+
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return "email";
+  if (/^(?!-)[a-z0-9.-]+\.[a-z]{2,}$/i.test(domainCandidate)) return "domain";
+  if (/^@?[a-zA-Z0-9._-]{2,40}$/.test(trimmed)) return "username";
   return null;
 }
 
@@ -169,9 +182,13 @@ async function handleRecon(req, res) {
   try {
     const body = await readBody(req);
     const payload = JSON.parse(body || "{}");
-    const type = payload.type;
-    const target = normalizeInput(type, payload.target);
-    const error = validateTarget(type, target);
+    const requestedType = payload.type || "auto";
+    const rawTarget = String(payload.target || "").trim();
+    const type = requestedType === "auto" ? detectTargetType(rawTarget) : requestedType;
+    const target = normalizeInput(type, rawTarget);
+    const error = requestedType === "auto" && !type
+      ? "Could not auto-detect the target. Enter an email, domain, or public username."
+      : validateTarget(type, target);
     if (error) return sendJson(res, 400, { error });
 
     const findings = await runCollectors(type, target);
@@ -179,6 +196,7 @@ async function handleRecon(req, res) {
     const result = {
       id: crypto.randomUUID(),
       type,
+      requestedType,
       target,
       generatedAt: new Date().toISOString(),
       findings,

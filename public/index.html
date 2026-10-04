@@ -42,6 +42,7 @@
             <div class="col-lg-3">
               <label class="form-label" for="targetType">Target type</label>
               <select class="form-select" id="targetType" required>
+                <option value="auto">Auto detect</option>
                 <option value="email">Email address</option>
                 <option value="username">Username</option>
                 <option value="domain">Domain name</option>
@@ -49,7 +50,7 @@
             </div>
             <div class="col-lg-6">
               <label class="form-label" for="targetInput">Target</label>
-              <input class="form-control" id="targetInput" placeholder="name@example.com" required>
+              <input class="form-control" id="targetInput" placeholder="email, domain, or username" required>
             </div>
             <div class="col-lg-3 d-grid">
               <button class="btn btn-cyber" type="submit" id="startButton">Start Recon</button>
@@ -59,6 +60,7 @@
             <div class="progress-bar" id="progressBar" style="width: 0%"></div>
           </div>
           <div class="progress-text" id="progressText">Awaiting target input.</div>
+          <div class="detected-target" id="detectedTarget" hidden></div>
         </section>
 
         <section class="summary-grid" data-post-scan hidden>

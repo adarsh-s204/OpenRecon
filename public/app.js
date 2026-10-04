@@ -4,6 +4,7 @@ const targetInput = document.getElementById("targetInput");
 const progressBar = document.getElementById("progressBar");
 const progressText = document.getElementById("progressText");
 const systemStatus = document.getElementById("systemStatus");
+const detectedTarget = document.getElementById("detectedTarget");
 const reportButton = document.getElementById("reportButton");
 const findingsTable = document.getElementById("findingsTable");
 const findingFilter = document.getElementById("findingFilter");
@@ -26,6 +27,7 @@ const graphState = {
 };
 
 const placeholders = {
+  auto: "email, domain, or username",
   email: "name@example.com",
   username: "public_username",
   domain: "example.com"
@@ -117,6 +119,8 @@ if ("ResizeObserver" in window) {
 function startProgress() {
   clearInterval(progressTimer);
   setPostScanVisible(false);
+  detectedTarget.hidden = true;
+  detectedTarget.textContent = "";
   progressBar.style.width = "8%";
   progressText.textContent = "Starting lawful public-source collection...";
   systemStatus.textContent = "Scanning";
@@ -148,6 +152,10 @@ function finishProgress(message, failed = false) {
 
 function renderResult(result) {
   setPostScanVisible(true);
+  detectedTarget.hidden = false;
+  detectedTarget.textContent = result.requestedType === "auto"
+    ? `Auto detected: ${formatTargetType(result.type)}`
+    : `Target type: ${formatTargetType(result.type)}`;
   document.getElementById("scoreValue").textContent = `${result.summary.exposureScore}/100`;
   document.getElementById("riskLevel").textContent = `${result.summary.riskLevel} exposure`;
   document.getElementById("findingCount").textContent = result.summary.findingCount;
@@ -166,6 +174,14 @@ function setPostScanVisible(visible) {
   postScanElements.forEach(element => {
     element.hidden = !visible;
   });
+}
+
+function formatTargetType(type) {
+  return {
+    email: "Email address",
+    domain: "Domain name",
+    username: "Username"
+  }[type] || type;
 }
 
 function renderFindings(findings, filter = "") {
