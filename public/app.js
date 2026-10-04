@@ -5,6 +5,7 @@ const progressBar = document.getElementById("progressBar");
 const progressText = document.getElementById("progressText");
 const systemStatus = document.getElementById("systemStatus");
 const detectedTarget = document.getElementById("detectedTarget");
+const scoreCard = document.getElementById("scoreCard");
 const reportButton = document.getElementById("reportButton");
 const findingsTable = document.getElementById("findingsTable");
 const findingFilter = document.getElementById("findingFilter");
@@ -121,6 +122,7 @@ function startProgress() {
   setPostScanVisible(false);
   detectedTarget.hidden = true;
   detectedTarget.textContent = "";
+  scoreCard.removeAttribute("data-risk");
   progressBar.style.width = "8%";
   progressText.textContent = "Starting lawful public-source collection...";
   systemStatus.textContent = "Scanning";
@@ -158,6 +160,7 @@ function renderResult(result) {
     : `Target type: ${formatTargetType(result.type)}`;
   document.getElementById("scoreValue").textContent = `${result.summary.exposureScore}/100`;
   document.getElementById("riskLevel").textContent = `${result.summary.riskLevel} exposure`;
+  scoreCard.setAttribute("data-risk", result.summary.riskLevel.toLowerCase());
   document.getElementById("findingCount").textContent = result.summary.findingCount;
   document.getElementById("sourceCount").textContent = result.summary.sourceCount;
   document.getElementById("correlationCount").textContent = result.summary.correlationCount;

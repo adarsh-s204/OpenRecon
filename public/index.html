@@ -14,9 +14,10 @@
           <span class="brand-mark">OR</span>
           <div>
             <strong>OpenRecon</strong>
-            <small>Lawful OSINT</small>
+            <small>Public OSINT Console</small>
           </div>
         </div>
+        <div class="sidebar-label">Workspace</div>
         <nav class="nav flex-column">
           <a class="nav-link active" href="#dashboard">Dashboard</a>
           <a class="nav-link" href="#findings" data-post-scan hidden>Findings</a>
@@ -30,14 +31,24 @@
 
       <main class="content">
         <header class="topbar">
-          <div>
-            <h1>OpenRecon</h1>
-            <p>Analyze public digital exposure across DNS, GitHub, social profile candidates, and public references.</p>
+          <div class="page-title">
+            <span class="eyebrow">OSINT Exposure Workspace</span>
+            <h1>OpenRecon Dashboard</h1>
+            <p>Review lawful public-source signals for emails, domains, and usernames.</p>
           </div>
-          <span class="status-pill" id="systemStatus">Ready</span>
+          <div class="topbar-actions">
+            <span class="status-pill" id="systemStatus">Ready</span>
+          </div>
         </header>
 
         <section class="recon-panel" id="dashboard">
+          <div class="recon-heading">
+            <div>
+              <span class="section-kicker">Scan Target</span>
+              <h2>Start a public exposure scan</h2>
+            </div>
+            <span class="scan-scope">Public sources only</span>
+          </div>
           <form id="reconForm" class="row g-3 align-items-end">
             <div class="col-lg-3">
               <label class="form-label" for="targetType">Target type</label>
@@ -56,6 +67,12 @@
               <button class="btn btn-cyber" type="submit" id="startButton">Start Recon</button>
             </div>
           </form>
+          <div class="source-strip" aria-label="Supported public sources">
+            <span>DNS</span>
+            <span>GitHub</span>
+            <span>Public profiles</span>
+            <span>Public references</span>
+          </div>
           <div class="progress recon-progress" role="progressbar" aria-label="Recon progress">
             <div class="progress-bar" id="progressBar" style="width: 0%"></div>
           </div>
@@ -64,7 +81,7 @@
         </section>
 
         <section class="summary-grid" data-post-scan hidden>
-          <article class="summary-card">
+          <article class="summary-card score-card" id="scoreCard">
             <span>Exposure Score</span>
             <strong id="scoreValue">--</strong>
             <small id="riskLevel">No scan yet</small>
@@ -144,7 +161,7 @@
         <section class="panel report-panel" id="report" data-post-scan hidden>
           <div>
             <h2>Report</h2>
-            <p id="reportSummary">Generate a PDF after a recon run. Reports include target summary, findings, source links, and lawful-use notice.</p>
+            <p id="reportSummary">PDF export includes the scan summary, findings, evidence links, and lawful-use notice.</p>
           </div>
           <button class="btn btn-outline-info" id="reportButton" disabled>Generate Report</button>
         </section>
