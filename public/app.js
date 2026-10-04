@@ -7,9 +7,23 @@ const systemStatus = document.getElementById("systemStatus");
 const reportButton = document.getElementById("reportButton");
 const findingsTable = document.getElementById("findingsTable");
 const findingFilter = document.getElementById("findingFilter");
+const networkGraph = document.getElementById("networkGraph");
+const zoomInGraphButton = document.getElementById("zoomInGraph");
+const zoomOutGraphButton = document.getElementById("zoomOutGraph");
+const resetGraphButton = document.getElementById("resetGraph");
+const postScanElements = document.querySelectorAll("[data-post-scan]");
 
 let currentResult = null;
 let progressTimer = null;
+const graphState = {
+  data: null,
+  zoom: 1,
+  panX: 0,
+  panY: 0,
+  isPanning: false,
+  lastPointerX: 0,
+  lastPointerY: 0
+};
 
 const placeholders = {
   email: "name@example.com",
@@ -54,8 +68,55 @@ reportButton.addEventListener("click", () => {
   window.open(`/api/report?id=${encodeURIComponent(currentResult.id)}`, "_blank");
 });
 
+zoomInGraphButton.addEventListener("click", () => zoomGraph(1.2));
+zoomOutGraphButton.addEventListener("click", () => zoomGraph(1 / 1.2));
+resetGraphButton.addEventListener("click", () => {
+  resetGraphView();
+  renderNetworkGraph();
+});
+
+networkGraph.addEventListener("wheel", event => {
+  if (!graphState.data) return;
+  event.preventDefault();
+  const point = getSvgPoint(event);
+  const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
+  zoomGraph(factor, point.x, point.y);
+}, { passive: false });
+
+networkGraph.addEventListener("pointerdown", event => {
+  if (!graphState.data) return;
+  graphState.isPanning = true;
+  graphState.lastPointerX = event.clientX;
+  graphState.lastPointerY = event.clientY;
+  networkGraph.classList.add("is-panning");
+  networkGraph.setPointerCapture(event.pointerId);
+});
+
+networkGraph.addEventListener("pointermove", event => {
+  if (!graphState.isPanning) return;
+  const rect = networkGraph.getBoundingClientRect();
+  const scaleX = Number(networkGraph.getAttribute("data-view-width")) / rect.width;
+  const scaleY = Number(networkGraph.getAttribute("data-view-height")) / rect.height;
+  graphState.panX += (event.clientX - graphState.lastPointerX) * scaleX;
+  graphState.panY += (event.clientY - graphState.lastPointerY) * scaleY;
+  graphState.lastPointerX = event.clientX;
+  graphState.lastPointerY = event.clientY;
+  applyGraphTransform();
+});
+
+networkGraph.addEventListener("pointerup", stopGraphPan);
+networkGraph.addEventListener("pointercancel", stopGraphPan);
+
+if ("ResizeObserver" in window) {
+  const graphResizeObserver = new ResizeObserver(() => renderNetworkGraph());
+  graphResizeObserver.observe(networkGraph);
+} else {
+  window.addEventListener("resize", () => renderNetworkGraph());
+}
+
 function startProgress() {
   clearInterval(progressTimer);
+  setPostScanVisible(false);
   progressBar.style.width = "8%";
   progressText.textContent = "Starting lawful public-source collection...";
   systemStatus.textContent = "Scanning";
@@ -86,6 +147,7 @@ function finishProgress(message, failed = false) {
 }
 
 function renderResult(result) {
+  setPostScanVisible(true);
   document.getElementById("scoreValue").textContent = `${result.summary.exposureScore}/100`;
   document.getElementById("riskLevel").textContent = `${result.summary.riskLevel} exposure`;
   document.getElementById("findingCount").textContent = result.summary.findingCount;
@@ -98,6 +160,12 @@ function renderResult(result) {
   drawExposureChart(result.summary);
   drawSourceChart(result.summary.sourceCounts);
   drawNetworkGraph(result.graph);
+}
+
+function setPostScanVisible(visible) {
+  postScanElements.forEach(element => {
+    element.hidden = !visible;
+  });
 }
 
 function renderFindings(findings, filter = "") {
@@ -196,14 +264,32 @@ function drawSourceChart(sourceCounts) {
 }
 
 function drawNetworkGraph(graph) {
+  graphState.data = graph;
+  resetGraphView();
+  renderNetworkGraph();
+}
+
+function renderNetworkGraph() {
   const svg = document.getElementById("networkGraph");
+  if (!graphState.data) return;
+
   svg.innerHTML = "";
-  const nodes = graph.nodes.slice(0, 28);
-  const links = graph.links.filter(link => nodes.some(node => node.id === link.from) && nodes.some(node => node.id === link.to));
-  const width = 920;
-  const height = 360;
+  const rect = svg.getBoundingClientRect();
+  const width = Math.max(320, Math.round(rect.width || 920));
+  const height = Math.max(300, Math.round(rect.height || 360));
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  svg.setAttribute("data-view-width", String(width));
+  svg.setAttribute("data-view-height", String(height));
+
+  const nodes = graphState.data.nodes.slice(0, 28);
+  const nodeIds = new Set(nodes.map(node => node.id));
+  const links = graphState.data.links.filter(link => nodeIds.has(link.from) && nodeIds.has(link.to));
   const center = { x: width / 2, y: height / 2 };
+  const outerRadius = Math.max(95, Math.min(width, height) * 0.36);
+  const innerRadius = Math.max(68, outerRadius * 0.62);
   const positioned = new Map();
+  const viewport = svgEl("g", { id: "graphViewport" });
+  svg.appendChild(viewport);
 
   nodes.forEach((node, index) => {
     if (node.type === "target") {
@@ -211,7 +297,7 @@ function drawNetworkGraph(graph) {
       return;
     }
     const angle = (index / Math.max(1, nodes.length - 1)) * Math.PI * 2;
-    const radius = node.type === "source" ? 130 : 210;
+    const radius = node.type === "source" || node.type === "domain" ? innerRadius : outerRadius;
     positioned.set(node.id, {
       ...node,
       x: center.x + Math.cos(angle) * radius,
@@ -223,24 +309,26 @@ function drawNetworkGraph(graph) {
     const from = positioned.get(link.from);
     const to = positioned.get(link.to);
     if (!from || !to) return;
-    svg.appendChild(svgEl("line", {
+    viewport.appendChild(svgEl("line", {
       x1: from.x,
       y1: from.y,
       x2: to.x,
       y2: to.y,
       stroke: "rgba(55,223,255,.32)",
-      "stroke-width": "1.4"
+      "stroke-width": "1.4",
+      "vector-effect": "non-scaling-stroke"
     }));
   });
 
   positioned.forEach(node => {
     const color = node.type === "target" ? "#37dfff" : node.type === "source" ? "#40e6a3" : "#2878ff";
-    svg.appendChild(svgEl("circle", {
+    viewport.appendChild(svgEl("circle", {
       cx: node.x,
       cy: node.y,
       r: node.type === "target" ? 24 : 14,
       fill: color,
-      opacity: node.type === "finding" ? "0.8" : "1"
+      opacity: node.type === "finding" ? "0.8" : "1",
+      "vector-effect": "non-scaling-stroke"
     }));
     const label = node.label.length > 24 ? `${node.label.slice(0, 22)}...` : node.label;
     const text = svgEl("text", {
@@ -250,10 +338,58 @@ function drawNetworkGraph(graph) {
       "font-size": "12"
     });
     text.textContent = label;
-    svg.appendChild(text);
+    viewport.appendChild(text);
   });
 
+  applyGraphTransform();
   document.getElementById("graphHint").textContent = `${nodes.length} nodes, ${links.length} links`;
+}
+
+function zoomGraph(factor, originX, originY) {
+  if (!graphState.data) return;
+  const oldZoom = graphState.zoom;
+  const nextZoom = Math.min(3.5, Math.max(0.45, oldZoom * factor));
+  const viewWidth = Number(networkGraph.getAttribute("data-view-width")) || networkGraph.clientWidth || 920;
+  const viewHeight = Number(networkGraph.getAttribute("data-view-height")) || networkGraph.clientHeight || 360;
+  const x = originX ?? viewWidth / 2;
+  const y = originY ?? viewHeight / 2;
+
+  graphState.panX = x - ((x - graphState.panX) * nextZoom) / oldZoom;
+  graphState.panY = y - ((y - graphState.panY) * nextZoom) / oldZoom;
+  graphState.zoom = nextZoom;
+  applyGraphTransform();
+}
+
+function applyGraphTransform() {
+  const viewport = document.getElementById("graphViewport");
+  if (!viewport) return;
+  viewport.setAttribute("transform", `translate(${graphState.panX} ${graphState.panY}) scale(${graphState.zoom})`);
+}
+
+function resetGraphView() {
+  graphState.zoom = 1;
+  graphState.panX = 0;
+  graphState.panY = 0;
+}
+
+function stopGraphPan(event) {
+  if (!graphState.isPanning) return;
+  graphState.isPanning = false;
+  networkGraph.classList.remove("is-panning");
+  if (event.pointerId !== undefined) {
+    networkGraph.releasePointerCapture(event.pointerId);
+  }
+}
+
+function getSvgPoint(event) {
+  const rect = networkGraph.getBoundingClientRect();
+  const viewWidth = Number(networkGraph.getAttribute("data-view-width")) || rect.width || 920;
+  const viewHeight = Number(networkGraph.getAttribute("data-view-height")) || rect.height || 360;
+
+  return {
+    x: ((event.clientX - rect.left) / rect.width) * viewWidth,
+    y: ((event.clientY - rect.top) / rect.height) * viewHeight
+  };
 }
 
 function drawGrid(ctx, width, height) {

@@ -19,9 +19,9 @@
         </div>
         <nav class="nav flex-column">
           <a class="nav-link active" href="#dashboard">Dashboard</a>
-          <a class="nav-link" href="#findings">Findings</a>
-          <a class="nav-link" href="#graph">Correlation Graph</a>
-          <a class="nav-link" href="#report">Report</a>
+          <a class="nav-link" href="#findings" data-post-scan hidden>Findings</a>
+          <a class="nav-link" href="#graph" data-post-scan hidden>Correlation Graph</a>
+          <a class="nav-link" href="#report" data-post-scan hidden>Report</a>
         </nav>
         <div class="ethics-note">
           Public sources only. No auth bypass, private profiles, password tests, CAPTCHA circumvention, or exploit activity.
@@ -61,7 +61,7 @@
           <div class="progress-text" id="progressText">Awaiting target input.</div>
         </section>
 
-        <section class="summary-grid">
+        <section class="summary-grid" data-post-scan hidden>
           <article class="summary-card">
             <span>Exposure Score</span>
             <strong id="scoreValue">--</strong>
@@ -84,7 +84,7 @@
           </article>
         </section>
 
-        <section class="visual-grid">
+        <section class="visual-grid" data-post-scan hidden>
           <div class="panel">
             <div class="panel-heading">
               <h2>Exposure Distribution</h2>
@@ -99,15 +99,24 @@
           </div>
         </section>
 
-        <section class="panel" id="graph">
+        <section class="panel" id="graph" data-post-scan hidden>
           <div class="panel-heading">
             <h2>Network Graph</h2>
-            <span id="graphHint">Run recon to build relationships.</span>
+            <div class="graph-heading-meta">
+              <span id="graphHint">Run recon to build relationships.</span>
+              <div class="graph-controls" aria-label="Graph zoom controls">
+                <button class="graph-button" type="button" id="zoomOutGraph" title="Zoom out">-</button>
+                <button class="graph-button" type="button" id="resetGraph" title="Reset graph">Reset</button>
+                <button class="graph-button" type="button" id="zoomInGraph" title="Zoom in">+</button>
+              </div>
+            </div>
           </div>
-          <svg id="networkGraph" viewBox="0 0 920 360" role="img" aria-label="Correlation graph"></svg>
+          <div class="graph-stage">
+            <svg id="networkGraph" role="img" aria-label="Correlation graph"></svg>
+          </div>
         </section>
 
-        <section class="panel" id="findings">
+        <section class="panel" id="findings" data-post-scan hidden>
           <div class="panel-heading">
             <h2>Detailed Findings</h2>
             <input class="form-control table-filter" id="findingFilter" placeholder="Filter findings">
@@ -130,7 +139,7 @@
           </div>
         </section>
 
-        <section class="panel report-panel" id="report">
+        <section class="panel report-panel" id="report" data-post-scan hidden>
           <div>
             <h2>Report</h2>
             <p id="reportSummary">Generate a PDF after a recon run. Reports include target summary, findings, source links, and lawful-use notice.</p>
